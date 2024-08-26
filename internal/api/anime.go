@@ -12,6 +12,7 @@ import (
 	"github.com/alvarorichard/Goanime/internal/util"
 	"github.com/ktr0731/go-fuzzyfinder"
 	"github.com/pkg/errors"
+	"github.com/w1tchCrafter/arrays/pkg/arrays"
 )
 
 const baseSiteURL = "https://animefire.plus/"
@@ -73,16 +74,17 @@ func searchAnimeOnPage(url string) (string, string, error) {
 	}
 
 	animes := parseAnimes(doc)
-	if len(animes) > 0 {
+	if animes.Len() > 0 {
 		selectedAnimeName, err := selectAnimeWithGoFuzzyFinder(animes)
 		if err != nil {
 			return "", "", err
 		}
-		for _, anime := range animes {
-			if anime.Name == selectedAnimeName {
-				return anime.URL, "", nil
-			}
-		}
+		
+    findAnime, _ := animes.Find(func(i int, a Anime) bool {
+      return a.Name == selectedAnimeName
+    })
+
+    return findAnime.URL, "", nil
 	}
 
 	nextPage, exists := doc.Find(".pagination .next a").Attr("href")
@@ -101,40 +103,48 @@ func sortAnimes(animeList []Anime) []Anime {
 	return animeList
 }
 
-func parseAnimes(doc *goquery.Document) []Anime {
-	var animes []Anime
+func parseAnimes(doc *goquery.Document) arrays.Array[Anime] {
+	animes := arrays.New[Anime]()
 	doc.Find(".row.ml-1.mr-1 a").Each(func(i int, s *goquery.Selection) {
-		animes = append(animes, Anime{
+		animes.Push(Anime{
 			Name: strings.TrimSpace(s.Text()),
 			URL:  s.AttrOr("href", ""),
 		})
 	})
+
 	return animes
 }
 
-func selectAnimeWithGoFuzzyFinder(animes []Anime) (string, error) {
-	if len(animes) == 0 {
+func selectAnimeWithGoFuzzyFinder(animes arrays.Array[Anime]) (string, error) {
+	if animes.Len() == 0 {
 		return "", errors.New("no anime provided")
 	}
 
-	animeNames := make([]string, len(animes))
-	for i, anime := range sortAnimes(animes) {
-		animeNames[i] = anime.Name
+  slicedAnimes, _ := animes.ToSlice(arrays.FULL_COPY) 
+
+	animeNames := arrays.New[string]()
+	for _, anime := range sortAnimes(slicedAnimes) {
+		animeNames.Push(anime.Name)
 	}
 
+	slicedAnimeName, _ := animeNames.ToSlice(arrays.FULL_COPY)
+
 	idx, err := fuzzyfinder.Find(
-		animeNames,
+		slicedAnimeName,
 		func(i int) string {
-			return animeNames[i]
+			selected, _ := animeNames.At(i)
+			return selected
 		},
 	)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to select anime with go-fuzzyfinder")
 	}
 
-	if idx < 0 || idx >= len(animes) {
+	if idx < 0 || idx >= animes.Len() {
 		return "", errors.New("invalid index returned by fuzzyfinder")
 	}
 
-	return animes[idx].Name, nil
+  animesSelected, err :=  animes.At(idx)
+
+  return animesSelected.Name, err
 }

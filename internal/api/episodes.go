@@ -9,6 +9,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/pkg/errors"
+	"github.com/w1tchCrafter/arrays/pkg/arrays"
 )
 
 func GetAnimeEpisodes(animeURL string) ([]Episode, error) {
@@ -31,11 +32,12 @@ func GetAnimeEpisodes(animeURL string) ([]Episode, error) {
 	episodes := parseEpisodes(doc)
 	sortEpisodesByNum(episodes)
 
-	return episodes, nil
+  slicedEpisode, _ := episodes.ToSlice(arrays.FULL_COPY)
+	return slicedEpisode, nil
 }
 
-func parseEpisodes(doc *goquery.Document) []Episode {
-	var episodes []Episode
+func parseEpisodes(doc *goquery.Document) arrays.Array[Episode] {
+	episodes := arrays.New[Episode]()
 	doc.Find("a.lEp.epT.divNumEp.smallbox.px-2.mx-1.text-left.d-flex").Each(func(i int, s *goquery.Selection) {
 		episodeNum := s.Text()
 		episodeURL, _ := s.Attr("href")
@@ -46,12 +48,13 @@ func parseEpisodes(doc *goquery.Document) []Episode {
 			return
 		}
 
-		episodes = append(episodes, Episode{
+		episodes.Push(Episode{
 			Number: episodeNum,
 			Num:    num,
 			URL:    episodeURL,
 		})
 	})
+
 	return episodes
 }
 
@@ -64,7 +67,9 @@ func parseEpisodeNumber(episodeNum string) (int, error) {
 	return strconv.Atoi(numStr)
 }
 
-func sortEpisodesByNum(episodes []Episode) {
+func sortEpisodesByNum(episodeList arrays.Array[Episode]) {
+  episodes, _ := episodeList.ToSlice(arrays.FULL_COPY)
+
 	sort.Slice(episodes, func(i, j int) bool {
 		return episodes[i].Num < episodes[j].Num
 	})
